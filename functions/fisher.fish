@@ -15,8 +15,8 @@ function __fisher_fetch_plugin --argument-names plugin source
     test -z "$tag" && set tag HEAD
 
     # GitLab tarball
-    if string match -q "gitlab.com/*" $repo
-        set --local path (string replace --regex -- '^gitlab.com/' '' $repo)
+    if string match -rq '^(https://)?gitlab.com/' $repo
+        set --local path (string replace --regex -- '^https?://gitlab.com/' '' $repo)
         set --local name (string split -- / $path)[-1]
         set --local url https://gitlab.com/$path/-/archive/$tag/$name-$tag.tar.gz
         echo Fetching (set_color --underline)$url(set_color normal)
