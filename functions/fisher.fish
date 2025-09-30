@@ -1,16 +1,20 @@
 function __fisher_fetch_plugin --argument-names plugin source
+    # Trap SIGINT so Ctrl+C exits immediately
+    trap "exit 130" SIGINT
+
     if test -e $plugin
+        # Local plugin: just copy files
         command cp -Rf $plugin/* $source
     else
         set --local temp (command mktemp -d)
         set --local repo (string split -- \@ $plugin) || set repo[2] HEAD
         set --local name
-        set --local url
 
+        # GitLab tarball download
         if string match -q "gitlab.com/*" $repo[1]
             set --local path (string replace --regex -- '^gitlab.com/' '' $repo[1])
-            set name (string split -- / $path)[-1]
-            set url https://gitlab.com/$path/-/archive/$repo[2]/$name-$repo[2].tar.gz
+            set --local name (string split -- / $path)[-1]
+            set --local url https://gitlab.com/$path/-/archive/$repo[2]/$name-$repo[2].tar.gz
             echo Fetching (set_color --underline)$url(set_color normal)
             if command curl -q --silent -L $url | command tar -xzC $temp -f - 2>/dev/null
                 command cp -Rf $temp/*/* $source
@@ -18,16 +22,19 @@ function __fisher_fetch_plugin --argument-names plugin source
                 echo "fisher: Invalid plugin name or host unavailable: $plugin" >&2
                 command rm -rf $source
             end
-        else if string match -q "git@*" $plugin; or string match -q "*.git" $plugin
+
+        # Git URLs (ssh, https, .git)
+        else if string match -q "git@*" $plugin; or string match -q "*.git" $plugin; or string match -q "http://*" $plugin; or string match -q "https://*" $plugin
             echo Fetching (set_color --underline)$plugin(set_color normal)
-            if command git clone --depth 1 --single-branch --filter=blob:none $plugin $temp 2>/dev/null
+            if command git clone --depth 1 --single-branch $plugin $temp &>/dev/null
                 command cp -Rf $temp/* $source
             else
                 echo "fisher: Invalid git repo or host unavailable: $plugin" >&2
                 command rm -rf $source
             end
+        # GitHub tarball download (default)
         else
-            set url https://api.github.com/repos/$repo[1]/tarball/$repo[2]
+            set --local url https://api.github.com/repos/$repo[1]/tarball/$repo[2]
             echo Fetching (set_color --underline)$url(set_color normal)
             if command curl -q --silent -L $url | command tar -xzC $temp -f - 2>/dev/null
                 command cp -Rf $temp/*/* $source
@@ -40,6 +47,7 @@ function __fisher_fetch_plugin --argument-names plugin source
         command rm -rf $temp
     end
 
+    # Check for .fish files in the plugin source (validation)
     if count $source/*.fish > /dev/null
         # .fish files exist
     end
