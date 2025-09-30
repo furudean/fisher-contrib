@@ -7,6 +7,9 @@ function __fisher_fetch_plugin --argument-names plugin source
         command cp -Rf $plugin/* $source
     else
         set --local temp (command mktemp -d)
+        # Trap EXIT to always clean up temp dir
+        trap "command rm -rf $temp" EXIT
+
         set --local repo (string split -- \@ $plugin) || set repo[2] HEAD
         set --local name
 
@@ -44,13 +47,6 @@ function __fisher_fetch_plugin --argument-names plugin source
                 command rm -rf $source
             end
         end
-
-        command rm -rf $temp
-    end
-
-    # Check for .fish files in the plugin source (validation)
-    if count $source/*.fish > /dev/null
-        # .fish files exist
     end
 end
 
