@@ -1,52 +1,66 @@
 function __fisher_fetch_plugin --argument-names plugin source
-    # Trap SIGINT so Ctrl+C exits immediately
     trap "exit 130" SIGINT
 
     if test -e $plugin
-        # Local plugin: just copy files
         command cp -Rf $plugin/* $source
-    else
-        set --local temp (command mktemp -d)
-        # Trap EXIT to always clean up temp dir
-        trap "command rm -rf $temp" EXIT
+        return
+    end
 
-        set --local repo (string split -- \@ $plugin) || set repo[2] HEAD
-        set --local name
+    set --local temp (command mktemp -d)
+    trap "command rm -rf $temp" EXIT
 
-        # GitLab tarball download
-        if string match -q "gitlab.com/*" $repo[1]
-            set --local path (string replace --regex -- '^gitlab.com/' '' $repo[1])
-            set --local name (string split -- / $path)[-1]
-            set --local url https://gitlab.com/$path/-/archive/$repo[2]/$name-$repo[2].tar.gz
-            echo Fetching (set_color --underline)$url(set_color normal)
-            if command curl -q --silent -L $url | command tar -xzC $temp -f - 2>/dev/null
-                command cp -Rf $temp/*/* $source
-            else
-                echo "fisher: Invalid plugin name or host unavailable: $plugin" >&2
-                command rm -rf $source
-            end
+    # Parse repo and tag (last '@' splits)
+    set --local repo (string replace --regex -- '@[^@]*$' '' $plugin)
+    set --local tag (string match --regex -- '@([^@]+)$' $plugin | string replace --regex -- '^@' '')
+    test -z "$tag" && set tag HEAD
 
-        # Git URLs (ssh, https, .git)
-        else if string match -q "git@*" $plugin; or string match -q "*.git" $plugin; or string match -q "http://*" $plugin; or string match -q "https://*" $plugin
-            echo Fetching (set_color --underline)$plugin(set_color normal)
-            if command git clone --depth 1 --single-branch $plugin $temp &>/dev/null
-                command cp -Rf $temp/* $source
-            else
-                echo "fisher: Invalid git repo or host unavailable: $plugin" >&2
-                command rm -rf $source
-            end
-
-        # GitHub tarball download (default)
-        else
-            set --local url https://api.github.com/repos/$repo[1]/tarball/$repo[2]
-            echo Fetching (set_color --underline)$url(set_color normal)
-            if command curl -q --silent -L $url | command tar -xzC $temp -f - 2>/dev/null
-                command cp -Rf $temp/*/* $source
-            else
-                echo "fisher: Invalid plugin name or host unavailable: $plugin" >&2
-                command rm -rf $source
-            end
+    # GitLab tarball
+    if string match -q "gitlab.com/*" $repo
+        set --local path (string replace --regex -- '^gitlab.com/' '' $repo)
+        set --local name (string split -- / $path)[-1]
+        set --local url https://gitlab.com/$path/-/archive/$tag/$name-$tag.tar.gz
+        echo Fetching (set_color --underline)$url(set_color normal)
+        if command curl -q --silent -L $url | command tar -xzC $temp -f - 2>/dev/null
+            command cp -Rf $temp/*/* $source
+            return
         end
+        echo "fisher: Invalid plugin name or host unavailable: $plugin" >&2
+        command rm -rf $source
+        return
+    end
+
+    # GitHub tarball
+    if string match -rq '^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(@[^@]+)?$' $plugin
+        set --local url https://api.github.com/repos/$repo/tarball/$tag
+        echo Fetching (set_color --underline)$url(set_color normal)
+        if command curl -q --silent -L $url | command tar -xzC $temp -f - 2>/dev/null
+            command cp -Rf $temp/*/* $source
+            return
+        end
+        echo "fisher: Invalid plugin name or host unavailable: $plugin" >&2
+        command rm -rf $source
+        return
+    end
+
+    # Git URLs (ssh, https, .git)
+    set --local repo_url $plugin
+    set --local repo_tag HEAD
+    if string match -rq '@[^/]+$' $plugin
+        set repo_url (string replace --regex -- '@[^@/]+$' '' $plugin)
+        set repo_tag (string replace --regex -- '^.*@' '' $plugin)
+    end
+
+    echo Fetching (set_color --underline)$repo_url(set_color normal)
+    if test "$repo_tag" = HEAD
+        command git clone --depth 1 --single-branch $repo_url $temp &>/dev/null
+    else
+        command git clone $repo_url --depth 1 --branch $repo_tag --single-branch $temp &>/dev/null
+    end
+    if test $status -eq 0
+        command cp -Rf $temp/* $source
+    else
+        echo "fisher: Invalid git repo or host unavailable: $plugin" >&2
+        command rm -rf $source
     end
 end
 
