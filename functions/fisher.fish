@@ -84,7 +84,7 @@ function fisher --argument-names cmd --description "A plugin manager for Fish"
             echo "Variables:"
             echo "       \$fisher_path  Plugin installation path. Default: $__fish_config_dir" | string replace --regex -- $HOME \~
         case ls list
-            string match --entire --regex -- "$argv[2]" $_fisher_plugins
+            string match --entire --regex -- "$argv[2]" (string replace --regex -- '^'$HOME '~' $_fisher_plugins)
         case install update remove
             isatty || read --local --null --array stdin && set --append argv $stdin
 
@@ -95,7 +95,7 @@ function fisher --argument-names cmd --description "A plugin manager for Fish"
             set --local old_plugins $_fisher_plugins
             set --local new_plugins
 
-            test -e $fish_plugins && set --local file_plugins (string match --regex -- '^[^\s]+$' <$fish_plugins | string replace -- \~ ~)
+            test -e $fish_plugins && set --local file_plugins (string match --regex -- '^[^\s]+$' <$fish_plugins | string replace --regex -- '^~' $HOME)
 
             if ! set --query argv[2]
                 if test "$cmd" != update
@@ -176,11 +176,11 @@ function fisher --argument-names cmd --description "A plugin manager for Fish"
                         for name in (string replace --filter --regex -- '.+/conf\.d/([^/]+)\.fish$' '$1' $$plugin_files_var)
                             emit {$name}_uninstall
                         end
-                        printf "%s\n" Removing\ (set_color red --bold)$plugin(set_color normal) "         "$$plugin_files_var | string replace -- \~ ~
+                        printf "%s\n" Removing\ (set_color red --bold)$plugin(set_color normal) "         "(string replace --regex -- '^'$HOME '~' $$plugin_files_var)
                         set --erase _fisher_plugins[$index]
                     end
 
-                    command rm -rf (string replace -- \~ ~ $$plugin_files_var)
+                    command rm -rf (string replace --regex -- '^~' $HOME $$plugin_files_var)
 
                     functions --erase (string replace --filter --regex -- '.+/functions/([^/]+)\.fish$' '$1' $$plugin_files_var)
 
@@ -220,19 +220,12 @@ function fisher --argument-names cmd --description "A plugin manager for Fish"
 
                 set --local plugin_files_var _fisher_(string escape --style=var -- $plugin)_files
 
-                set --query files[1] && set --universal $plugin_files_var (string replace -- $source $fisher_path $files | string replace -- ~ \~)
+                set --query files[1] && set --universal $plugin_files_var (string replace -- $source $fisher_path $files | string replace --regex -- '^'$HOME '~')
 
                 contains -- $plugin $_fisher_plugins || set --universal --append _fisher_plugins $plugin
                 contains -- $plugin $install_plugins && set --local event install || set --local event update
 
-                printf "%s\n" Installing\ (set_color --bold)$plugin(set_color normal) "           "$$plugin_files_var | string replace -- \~ ~
-
-                for file in (string match --regex -- '.+/[^/]+\.fish$' $$plugin_files_var | string replace -- \~ ~)
-                    source $file
-                    if set --local name (string replace --regex -- '.+conf\.d/([^/]+)\.fish$' '$1' $file)
-                        emit {$name}_$event
-                    end
-                end
+                printf "%s\n" Installing\ (set_color --bold)$plugin(set_color normal) "           "(string replace --regex -- '^'$HOME '~' $$plugin_files_var)
             end
 
             command rm -rf $source_plugins
@@ -248,7 +241,7 @@ function fisher --argument-names cmd --description "A plugin manager for Fish"
                     contains -- (string lower -- $plugin) (string lower -- $commit_plugins) || set --append commit_plugins $plugin
                 end
 
-                string replace --regex -- $HOME \~ $commit_plugins >$fish_plugins
+                string replace --regex -- '^'$HOME '~' $commit_plugins >$fish_plugins
             else
                 set --erase _fisher_plugins
                 command rm -f $fish_plugins
@@ -275,7 +268,7 @@ if ! set --query _fisher_upgraded_to_4_4
         fisher update >/dev/null 2>/dev/null
     else
         for var in (set --names | string match --entire --regex '^_fisher_.+_files$')
-            set $var (string replace -- ~ \~ $$var)
+            set $var (string replace --regex -- '^~' $HOME $$var)
         end
         functions --erase _fisher_fish_postexec
     end
