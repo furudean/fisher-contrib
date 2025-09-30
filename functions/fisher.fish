@@ -32,6 +32,7 @@ function __fisher_fetch_plugin --argument-names plugin source
                 echo "fisher: Invalid git repo or host unavailable: $plugin" >&2
                 command rm -rf $source
             end
+
         # GitHub tarball download (default)
         else
             set --local url https://api.github.com/repos/$repo[1]/tarball/$repo[2]
