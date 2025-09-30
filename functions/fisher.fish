@@ -11,23 +11,36 @@ function __fisher_fetch_plugin --argument-names plugin source
             set --local path (string replace --regex -- '^gitlab.com/' '' $repo[1])
             set name (string split -- / $path)[-1]
             set url https://gitlab.com/$path/-/archive/$repo[2]/$name-$repo[2].tar.gz
+            echo Fetching (set_color --underline)$url(set_color normal)
+            if command curl -q --silent -L $url | command tar -xzC $temp -f - 2>/dev/null
+                command cp -Rf $temp/*/* $source
+            else
+                echo "fisher: Invalid plugin name or host unavailable: $plugin" >&2
+                command rm -rf $source
+            end
+        else if string match -q "git@*" $plugin; or string match -q "*.git" $plugin
+            echo Fetching (set_color --underline)$plugin(set_color normal)
+            if command git clone --depth 1 --single-branch --filter=blob:none $plugin $temp 2>/dev/null
+                command cp -Rf $temp/* $source
+            else
+                echo "fisher: Invalid git repo or host unavailable: $plugin" >&2
+                command rm -rf $source
+            end
         else
             set url https://api.github.com/repos/$repo[1]/tarball/$repo[2]
-        end
-
-        echo Fetching (set_color --underline)$url(set_color normal)
-
-        if command curl -q --silent -L $url | command tar -xzC $temp -f - 2>/dev/null
-            command cp -Rf $temp/*/* $source
-        else
-            echo "fisher: Invalid plugin name or host unavailable: $plugin" >&2
-            command rm -rf $source
+            echo Fetching (set_color --underline)$url(set_color normal)
+            if command curl -q --silent -L $url | command tar -xzC $temp -f - 2>/dev/null
+                command cp -Rf $temp/*/* $source
+            else
+                echo "fisher: Invalid plugin name or host unavailable: $plugin" >&2
+                command rm -rf $source
+            end
         end
 
         command rm -rf $temp
     end
 
-    if string match --quiet --regex -- .+\.fish\$ $source/*
+    if count $source/*.fish > /dev/null
         # .fish files exist
     end
 end
