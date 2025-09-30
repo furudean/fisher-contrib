@@ -1,3 +1,37 @@
+function __fisher_fetch_plugin --argument-names plugin source
+    if test -e $plugin
+        command cp -Rf $plugin/* $source
+    else
+        set --local temp (command mktemp -d)
+        set --local repo (string split -- \@ $plugin) || set repo[2] HEAD
+        set --local name
+        set --local url
+
+        if string match -q "gitlab.com/*" $repo[1]
+            set --local path (string replace --regex -- '^gitlab.com/' '' $repo[1])
+            set name (string split -- / $path)[-1]
+            set url https://gitlab.com/$path/-/archive/$repo[2]/$name-$repo[2].tar.gz
+        else
+            set url https://api.github.com/repos/$repo[1]/tarball/$repo[2]
+        end
+
+        echo Fetching (set_color --underline)$url(set_color normal)
+
+        if command curl -q --silent -L $url | command tar -xzC $temp -f - 2>/dev/null
+            command cp -Rf $temp/*/* $source
+        else
+            echo "fisher: Invalid plugin name or host unavailable: $plugin" >&2
+            command rm -rf $source
+        end
+
+        command rm -rf $temp
+    end
+
+    if string match --quiet --regex -- .+\.fish\$ $source/*
+        # .fish files exist
+    end
+end
+
 function fisher --argument-names cmd --description "A plugin manager for Fish"
     set --query fisher_path || set --local fisher_path $__fish_config_dir
     set --local fisher_version 4.4.5
@@ -83,32 +117,8 @@ function fisher --argument-names cmd --description "A plugin manager for Fish"
                 command mkdir -p $source/{completions,conf.d,themes,functions}
 
                 $fish_path --command "
-                    if test -e $plugin
-                        command cp -Rf $plugin/* $source
-                    else
-                        set temp (command mktemp -d)
-                        set repo (string split -- \@ $plugin) || set repo[2] HEAD
-
-                        if set path (string replace --regex -- '^(https://)?gitlab.com/' '' \$repo[1])
-                            set name (string split -- / \$path)[-1]
-                            set url https://gitlab.com/\$path/-/archive/\$repo[2]/\$name-\$repo[2].tar.gz
-                        else
-                            set url https://api.github.com/repos/\$repo[1]/tarball/\$repo[2]
-                        end
-
-                        echo Fetching (set_color --underline)\$url(set_color normal)
-
-                        if command curl -q --silent -L \$url | command tar -xzC \$temp -f - 2>/dev/null
-                            command cp -Rf \$temp/*/* $source
-                        else
-                            echo fisher: Invalid plugin name or host unavailable: \\\"$plugin\\\" >&2
-                            command rm -rf $source
-                        end
-
-                        command rm -rf \$temp
-                    end
-
-                    set files $source/* && string match --quiet --regex -- .+\.fish\\\$ \$files
+                    $(functions __fisher_fetch_plugin)
+                    __fisher_fetch_plugin \"$plugin\" \"$source\"
                 " &
 
                 set --append pid_list (jobs --last --pid)
