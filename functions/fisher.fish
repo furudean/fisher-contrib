@@ -227,7 +227,7 @@ function fisher --argument-names cmd --description "A plugin manager for Fish"
 
                 printf "%s\n" Installing\ (set_color --bold)$plugin(set_color normal) "           "(string replace --regex -- '^'$HOME '~' $$plugin_files_var)
 
-                for file in (string match --regex -- '.+/[^/]+\.fish$' $$plugin_files_var | string replace --regex -- '^'$HOME '~')
+                for file in (string match --regex -- '.+/[^/]+\.fish$' $$plugin_files_var | string replace -- \~ ~)
                     source $file
                     if set --local name (string replace --regex -- '.+conf\.d/([^/]+)\.fish$' '$1' $file)
                         emit {$name}_$event
