@@ -226,6 +226,13 @@ function fisher --argument-names cmd --description "A plugin manager for Fish"
                 contains -- $plugin $install_plugins && set --local event install || set --local event update
 
                 printf "%s\n" Installing\ (set_color --bold)$plugin(set_color normal) "           "(string replace --regex -- '^'$HOME '~' $$plugin_files_var)
+
+                for file in (string match --regex -- '.+/[^/]+\.fish$' $$plugin_files_var | string replace --regex -- '^'$HOME '~')
+                    source $file
+                    if set --local name (string replace --regex -- '.+conf\.d/([^/]+)\.fish$' '$1' $file)
+                        emit {$name}_$event
+                    end
+                end
             end
 
             command rm -rf $source_plugins
